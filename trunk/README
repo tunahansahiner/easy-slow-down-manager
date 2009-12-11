@@ -1,0 +1,10 @@
+
+
+Easy slow down manager provides Linux users with functionality similar to "Samsung Easy Speed Up Manager".
+
+It consist of kernel module named easy_slow_down_manager. To use it first issue "modprobe easy_slow_down_manager". If everything goes fine you get /proc/easy_slow_down_manager file.
+
+ - "echo 0 > /proc/easy_slow_down_manager" turns laptop to "normal" mode.
+ - "echo 1 > /proc/easy_slow_down_manager" turns laptop to "silent" mode.
+ - "echo 2 > /proc/easy_slow_down_manager" turns laptop to "speed" mode. 
+
