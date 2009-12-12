@@ -11,6 +11,10 @@ MODULE_DESCRIPTION("Samsung notebook fan controling module.");
 MODULE_AUTHOR("George Kibardin");
 
 /*
+ * Special thank to Greg Kroah-Hartman from whom I've borrowed key pieces of code
+ */
+
+/*
  * There is 3 different modes here:
  *   0 - off
  *   1 - on
