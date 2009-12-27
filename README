@@ -1,10 +1,11 @@
 
 
-Easy slow down manager provides Linux users with functionality similar to "Samsung Easy Speed Up Manager".
+Easy slow down manager provides Linux users with functionality similar to "Samsung Easy Speed Up Manager". It also allows to turn WiFi on and off.
 
-It consist of kernel module named easy_slow_down_manager. To use it first issue "modprobe easy_slow_down_manager". If everything goes fine you get /proc/easy_slow_down_manager file.
+It consist of kernel module named easy_slow_down_manager. To use it first issue "modprobe easy_slow_down_manager". If everything goes fine you get /proc/easy_slow_down_manager and /proc/easy_wifi_kill files.
 
  - "echo 0 > /proc/easy_slow_down_manager" turns laptop to "normal" mode.
  - "echo 1 > /proc/easy_slow_down_manager" turns laptop to "silent" mode.
  - "echo 2 > /proc/easy_slow_down_manager" turns laptop to "speed" mode. 
-
+ - "echo 0 > /proc/easy_wifi_kill" turns WiFi off.
+ - "echo 1 > /proc/easy_wifi_kill" turns WiFi on.
