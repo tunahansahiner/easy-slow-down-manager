@@ -59,8 +59,10 @@ class StatusIcc:
 
       wifi_sub = gtk.Menu()
       self.wifi_on = gtk.CheckMenuItem('Wifi on')
+      self.wifi_on.set_draw_as_radio(True)
       self.wifi_on.connect("activate",self.set_wifi,1)
       self.wifi_off = gtk.CheckMenuItem('Wifi off')
+      self.wifi_off.set_draw_as_radio(True)
       self.wifi_off.connect("activate",self.set_wifi,0)
 
       wifi_sub.add(self.wifi_on)
