@@ -40,13 +40,13 @@ class StatusIcc:
       about.connect("activate", self.about)
 
       perf_sub = gtk.Menu()
-      self.perf0 = gtk.CheckMenuItem('Low performance')
+      self.perf0 = gtk.CheckMenuItem('Silent mode')
       self.perf0.set_draw_as_radio(True)
       self.perf0.connect("activate",self.set_performance,1)
-      self.perf1 = gtk.CheckMenuItem('Normal performance')
+      self.perf1 = gtk.CheckMenuItem('Normal mode')
       self.perf1.set_draw_as_radio(True)
       self.perf1.connect("activate",self.set_performance,0)
-      self.perf2 = gtk.CheckMenuItem('High performance')
+      self.perf2 = gtk.CheckMenuItem('Speed mode')
       self.perf2.set_draw_as_radio(True)
       self.perf2.connect("activate",self.set_performance,2)
 
@@ -54,7 +54,7 @@ class StatusIcc:
       perf_sub.add(self.perf1)
       perf_sub.add(self.perf2)
       
-      perf = gtk.MenuItem('Performance')
+      perf = gtk.MenuItem('SpeedUp Manager')
       perf.set_submenu(perf_sub)
 
       wifi_sub = gtk.Menu()
