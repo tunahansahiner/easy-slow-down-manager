@@ -1,12 +1,12 @@
 # Contributor: George Kibardin <george-kibardin at yandex dot ru>
 pkgname=easy-slow-down-manager
 pkgver=0.2
-pkgrel=1
+pkgrel=2
 pkgdesc="A fan control kernel module for Samsung laptops"
 arch=('i686' 'x86_64')
 url="http://code.google.com/p/easy-slow-down-manager"
 license=('GPL')
-depends=('kernel26')
+depends=('kernel26' 'kernel26-headers')
 source=(easy-slow-down-manager.tar.gz)
 md5sums=('91293b5bf62dfc74ae86c9186ec49a92')
 
