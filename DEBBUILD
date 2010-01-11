@@ -1,0 +1,30 @@
+#!/bin/bash
+# install module to dkms, build a .deb package, uninstall module; 
+# requires dkms
+# author: Kobelkov S.
+# license: GPL
+
+NAME=easy_slow_down_manager
+VERSION=0.11
+
+if [ `whoami` != "root" ]; then 
+  echo "Script requires root privileges to run, trying to restart using sudo"
+  exec sudo $0
+fi
+
+USRC=/usr/src/$NAME-$VERSION
+mkdir -p $USRC/$NAME-dkms-mkdeb
+cp -r /etc/dkms/template-dkms-mkdeb/* $USRC/$NAME-dkms-mkdeb
+cat /etc/dkms/template-dkms-mkdeb/debian/postinst | sed 's/CVERSION=.*/CVERSION=MODULE_VERSION/' > $USRC/$NAME-dkms-mkdeb/debian/postinst
+cp Makefile $USRC
+cp easy_slow_down_manager.c $USRC
+cp dkms.conf $USRC
+dkms add -m $NAME -v $VERSION
+dkms build -m $NAME -v $VERSION
+dkms install -m $NAME -v $VERSION
+dkms mkdeb -m $NAME -v $VERSION --source-only
+cp /var/lib/dkms/$NAME/$VERSION/deb/*.deb ./
+
+dkms uninstall -m $NAME -v $VERSION
+dkms remove -m $NAME -v $VERSION --all
+rm -rf $USRC
