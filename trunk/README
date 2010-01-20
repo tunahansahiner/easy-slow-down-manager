@@ -9,3 +9,5 @@ It consist of kernel module named easy_slow_down_manager. To use it first issue 
  - "echo 2 > /proc/easy_slow_down_manager" turns laptop to "speed" mode. 
  - "echo 0 > /proc/easy_wifi_kill" turns WiFi off.
  - "echo 1 > /proc/easy_wifi_kill" turns WiFi on.
+
+Samsung backlight module fixes backlight-related bugs in acpi for Samsung laptops. To enable it, boot kernel with acpi_backlight=vendor option.

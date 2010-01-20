@@ -18,6 +18,7 @@ cp -r /etc/dkms/template-dkms-mkdeb/* $USRC/$NAME-dkms-mkdeb
 cat /etc/dkms/template-dkms-mkdeb/debian/postinst | sed 's/CVERSION=.*/CVERSION=MODULE_VERSION/' > $USRC/$NAME-dkms-mkdeb/debian/postinst
 cp Makefile $USRC
 cp easy_slow_down_manager.c $USRC
+cp samsung-backlight.c $USRC
 cp dkms.conf $USRC
 dkms add -m $NAME -v $VERSION
 dkms build -m $NAME -v $VERSION
