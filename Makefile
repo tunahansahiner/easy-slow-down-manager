@@ -1,4 +1,4 @@
-obj-m := easy_slow_down_manager.o
+obj-m := easy_slow_down_manager.o samsung-backlight.o
 KVERSION = $(shell uname -r)
 
 all:
