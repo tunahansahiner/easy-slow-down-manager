@@ -102,6 +102,15 @@ static struct dmi_system_id __initdata samsung_dmi_table[] = {
 		.callback = dmi_check_cb,
 	},
 	{
+		.ident = "R518",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "SAMSUNG ELECTRONICS CO., LTD."),
+			DMI_MATCH(DMI_PRODUCT_NAME, "R518"),
+			DMI_MATCH(DMI_BOARD_NAME, "R518"),
+		},
+		.callback = dmi_check_cb,
+	},
+	{
 		.ident = "NP-Q45",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "SAMSUNG ELECTRONICS CO., LTD."),
@@ -127,7 +136,7 @@ static int __init samsung_init(void)
         if(!pci_device) 
 	  pci_device = pci_get_device(PCI_VENDOR_ID_INTEL, 0x2a02, NULL); // NP-Q45
         if(!pci_device) 
-	  pci_device = pci_get_device(PCI_VENDOR_ID_INTEL, 0x2a42, NULL); // samsung X360
+	  pci_device = pci_get_device(PCI_VENDOR_ID_INTEL, 0x2a42, NULL); // samsung X360, R518
 	if (!pci_device)
           return -ENODEV;
  
