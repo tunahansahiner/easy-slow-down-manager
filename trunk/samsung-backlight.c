@@ -21,24 +21,132 @@
 #define MAX_BRIGHT	0xff
 #define OFFSET		0xf4
 
+#define SABI_MAX_BRIGHT     0x07
+
+#define SABI_GET_BRIGHTNESS            0x10
+#define SABI_SET_BRIGHTNESS            0x11
+
+#define SABI_GET_BACKLIGHT             0x2d
+#define SABI_SET_BACKLIGHT             0x2e
+
 static int offset = OFFSET;
 module_param(offset, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(offset, "The offset into the PCI device for the brightness control");
+static int debug = 0;
+module_param(debug, bool, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(debug, "Verbose output");
+static int use_sabi = 1;
+module_param(use_sabi, bool, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(use_sabi, "Use SABI to control brightness");
 
 static struct pci_dev *pci_device;
 static struct backlight_device *backlight_device;
 
+/*
+ * SABI HEADER in low memory (f0000)
+ * We need to poke through memory to find a signature in order to find the
+ * exact location of this structure.
+ */
+struct sabi_header {
+    u16 port;
+    u8 iface_func;
+    u8 en_mem;
+    u8 re_mem;
+    u16 data_offset;
+    u16 data_segment;
+    u8 bios_ifver;
+    u8 launcher_string;
+} __attribute__((packed));
+
+/*
+ * The SABI interface that we use to write and read values from the system.
+ * It is found by looking at the data_offset and data_segment values in the sabi
+ * header structure
+ */
+struct sabi_interface {
+    u16 mainfunc;
+    u16 subfunc;
+    u8 complete;
+    u8 retval[20];
+} __attribute__((packed));
+
+/* Structure to get data back to the calling function */
+struct sabi_retval {
+    u8 retval[4];
+};
+
+static struct sabi_header __iomem *sabi;
+static struct sabi_interface __iomem *sabi_iface;
+static void __iomem *f0000_segment;
+static struct mutex sabi_mutex;
+
+int sabi_exec_command(u8 command, u8 data, struct sabi_retval *sretval)
+{
+    int retval = 0;
+    
+    mutex_lock(&sabi_mutex);
+
+    /* enable memory to be able to write to it */
+    outb(readb(&sabi->en_mem), readw(&sabi->port));
+
+    /* write out the command */
+    writew(0x5843, &sabi_iface->mainfunc);
+    writew(command, &sabi_iface->subfunc);
+    writeb(0, &sabi_iface->complete);
+    writeb(data, &sabi_iface->retval[0]);
+    outb(readb(&sabi->iface_func), readw(&sabi->port));
+
+    /* sleep for a bit to let the command complete */
+    msleep(10);
+
+    /* write protect memory to make it safe */
+    outb(readb(&sabi->re_mem), readw(&sabi->port));
+
+    /* see if the command actually succeeded */
+    if (readb(&sabi_iface->complete) == 0xaa &&
+        readb(&sabi_iface->retval[0]) != 0xff) {
+        if (sretval) {
+            sretval->retval[0] = readb(&sabi_iface->retval[0]);
+            sretval->retval[1] = readb(&sabi_iface->retval[1]);
+            sretval->retval[2] = readb(&sabi_iface->retval[2]);
+            sretval->retval[3] = readb(&sabi_iface->retval[3]);
+        }
+    }
+    else {
+        /* Something bad happened, so report it and error out */
+        printk(KERN_WARNING "SABI command 0x%02x failed with completion flag 0x%02x and output 0x%02x\n",
+            command, readb(&sabi_iface->complete),
+        readb(&sabi_iface->retval[0]));
+        retval = -EINVAL;
+    }
+    mutex_unlock(&sabi_mutex);
+    return retval;
+}
+
+
 static u8 read_brightness(void)
 {
 	u8 brightness;
-
-	pci_read_config_byte(pci_device, offset, &brightness);
+        if(use_sabi){
+          struct sabi_retval sretval;    
+          brightness=0;
+          if (!sabi_exec_command(SABI_GET_BACKLIGHT, 0, &sretval)) {
+            brightness = sretval.retval[0];
+            if (brightness != 0)
+              --brightness;
+          }
+        } else {
+	  pci_read_config_byte(pci_device, offset, &brightness);
+        }
 	return brightness;
 }
 
 static void set_brightness(u8 brightness)
 {
-	pci_write_config_byte(pci_device, offset, brightness);
+	if(use_sabi)
+          sabi_exec_command(SABI_SET_BRIGHTNESS, brightness + 1, NULL);
+	else
+          pci_write_config_byte(pci_device, offset, brightness);
 }
 
 static int get_brightness(struct backlight_device *bd)
@@ -122,34 +230,120 @@ static struct dmi_system_id __initdata samsung_dmi_table[] = {
 	{ },
 };
 
+static struct dmi_system_id __initdata samsung_sabi_dmi_table[] = {
+    {
+        .ident = "Samsung",
+        .matches = {
+            DMI_MATCH(DMI_SYS_VENDOR, "SAMSUNG ELECTRONICS CO., LTD."),
+        },
+        .callback = NULL,
+    },
+    { },
+};
+
+
 static int __init samsung_init(void)
 {
-	if (!dmi_check_system(samsung_dmi_table))
+        struct device *parent=NULL;	
+
+	if ( (use_sabi && !dmi_check_system(samsung_sabi_dmi_table)) ||
+             (!use_sabi && !dmi_check_system(samsung_dmi_table)))
 		return -ENODEV;
 
-	/*
-	 * The Samsung N120, N130, and NC10 use pci device id 0x27ae, while the
-	 * NP-Q45 uses 0x2a02.  Odds are we might need to add more to the
-	 * list over time...
-	 */
-	pci_device = pci_get_device(PCI_VENDOR_ID_INTEL, 0x27ae, NULL);
-        if(!pci_device) 
-	  pci_device = pci_get_device(PCI_VENDOR_ID_INTEL, 0x2a02, NULL); // NP-Q45
-        if(!pci_device) 
-	  pci_device = pci_get_device(PCI_VENDOR_ID_INTEL, 0x2a42, NULL); // samsung X360, R518
-	if (!pci_device)
-          return -ENODEV;
+        if(use_sabi){
+	    const char *test_str = "SwSmi@";
+	    int pos;
+	    int index = 0;
+	    void __iomem *base;
+	    unsigned int ifaceP;
+	
+	    mutex_init(&sabi_mutex);
+	
+	    if (!dmi_check_system(samsung_dmi_table)) {
+	        printk(KERN_ERR "Samsung-backlight is intended to work only with Samsung laptops.\n");
+	        return -ENODEV;
+	    }
+	
+	    f0000_segment = ioremap(0xf0000, 0xffff);
+	    if (!f0000_segment) {
+	        printk(KERN_ERR "Samsung-backlight: Can't map the segment at 0xf0000\n");
+	        return -EINVAL;
+	    }
+	
+	    printk(KERN_INFO "Samsung-backlight: checking for SABI support.\n");
+	
+	    /* Try to find the signature "SwSmi@" in memory to find the header */
+	    base = f0000_segment;
+	    for (pos = 0; pos < 0xffff; ++pos) {
+	        char temp = readb(base + pos);
+	        if (temp == test_str[index]) {
+	            if (5 == index++)
+	                break;
+	        }
+	        else {
+	            index = 0;
+	        }
+	    }
+	    if (pos == 0xffff) {
+	        printk(KERN_INFO "Samsung-backlight: SABI is not supported\n");
+	        iounmap(f0000_segment);
+	        return -EINVAL;
+	    }
+	
+	    sabi = (struct sabi_header __iomem *)(base + pos + 1);
+	
+	    printk(KERN_INFO "Samsung-backlight: SABI is supported (%x)\n", pos + 0xf0000 - 6);
+	    if (debug) {
+	        printk(KERN_DEBUG "SABI header:\n");
+	        printk(KERN_DEBUG " SMI Port Number = 0x%04x\n", readw(&sabi->port));
+	        printk(KERN_DEBUG " SMI Interface Function = 0x%02x\n", readb(&sabi->iface_func));
+	        printk(KERN_DEBUG " SMI enable memory buffer = 0x%02x\n", readb(&sabi->en_mem));
+	        printk(KERN_DEBUG " SMI restore memory buffer = 0x%02x\n", readb(&sabi->re_mem));
+	        printk(KERN_DEBUG " SABI data offset = 0x%04x\n", readw(&sabi->data_offset));
+	        printk(KERN_DEBUG " SABI data segment = 0x%04x\n", readw(&sabi->data_segment));
+	        printk(KERN_DEBUG " BIOS interface version = 0x%02x\n", readb(&sabi->bios_ifver));
+	        printk(KERN_DEBUG " KBD Launcher string = 0x%02x\n", readb(&sabi->launcher_string));
+	    }
+	
+	    /* Get a pointer to the SABI Interface */
+	    ifaceP = (readw(&sabi->data_segment) & 0x0ffff) << 4;
+	    ifaceP += readw(&sabi->data_offset) & 0x0ffff;
+	    sabi_iface = (struct sabi_interface __iomem *)ioremap(ifaceP, 16);
+	    if (!sabi_iface) {
+	        printk(KERN_ERR "Samsung-backlight: Can't remap %x\n", ifaceP);
+	        iounmap(f0000_segment);
+	        return -EINVAL;
+	    }
+	
+	    if (debug) {
+	        printk(KERN_DEBUG "Samsung-backlight: SABI Interface = %p\n", sabi_iface);
+	    }
+        }else{
+          /*
+	   * The Samsung N120, N130, and NC10 use pci device id 0x27ae, while the
+	   * NP-Q45 uses 0x2a02.  Odds are we might need to add more to the
+	   * list over time...
+	   */
+          int pcidevids[]={0x27ae,0x2a02,0x2a42,0};
+	  int i;
+          for(i=0, pci_device=NULL;pcidevids[i]>0 && pci_device==NULL;++i)
+	    pci_device = pci_get_device(PCI_VENDOR_ID_INTEL, pcidevids[i], NULL);
+          if (!pci_device)
+            return -ENODEV;
+          parent=&pci_device->dev;
+        }
  
         /* create a backlight device to talk to this one */
 	backlight_device = backlight_device_register("samsung",
-						     &pci_device->dev,
+						     parent,
 						     NULL, &backlight_ops);
 	if (IS_ERR(backlight_device)) {
-		pci_dev_put(pci_device);
+                if(pci_device)
+		  pci_dev_put(pci_device);
 		return PTR_ERR(backlight_device);
 	}
 
-	backlight_device->props.max_brightness = MAX_BRIGHT;
+	backlight_device->props.max_brightness = use_sabi ? SABI_MAX_BRIGHT : MAX_BRIGHT;
 	backlight_device->props.brightness = read_brightness();
 	backlight_device->props.power = FB_BLANK_UNBLANK;
 	backlight_update_status(backlight_device);
@@ -160,9 +354,13 @@ static int __init samsung_init(void)
 static void __exit samsung_exit(void)
 {
 	backlight_device_unregister(backlight_device);
-
-	/* we are done with the PCI device, put it back */
-	pci_dev_put(pci_device);
+      	if(use_sabi){
+     		iounmap(sabi_iface);
+      		iounmap(f0000_segment);
+	}
+        /* we are done with the PCI device, put it back */
+	if(pci_device)
+		pci_dev_put(pci_device);
 }
 
 module_init(samsung_init);
@@ -171,8 +369,5 @@ module_exit(samsung_exit);
 MODULE_AUTHOR("Greg Kroah-Hartman <gregkh@suse.de>");
 MODULE_DESCRIPTION("Samsung Backlight driver");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("dmi:*:svnSAMSUNGELECTRONICSCO.,LTD.:pnN120:*:rnN120:*");
-MODULE_ALIAS("dmi:*:svnSAMSUNGELECTRONICSCO.,LTD.:pnN130:*:rnN130:*");
-MODULE_ALIAS("dmi:*:svnSAMSUNGELECTRONICSCO.,LTD.:pnX360:*:rnX360:*");
-MODULE_ALIAS("dmi:*:svnSAMSUNGELECTRONICSCO.,LTD.:pnNC10:*:rnNC10:*");
-MODULE_ALIAS("dmi:*:svnSAMSUNGELECTRONICSCO.,LTD.:pnSQ45S70S:*:rnSQ45S70S:*");
+MODULE_ALIAS("dmi:*:svnSAMSUNGELECTRONICSCO.,LTD.:pn*:*:rn*:*");
+
