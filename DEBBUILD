@@ -5,7 +5,7 @@
 # license: GPL
 
 NAME=easy_slow_down_manager
-VERSION=0.11
+VERSION=0.13
 
 if [ `whoami` != "root" ]; then 
   echo "Script requires root privileges to run, trying to restart using sudo"
