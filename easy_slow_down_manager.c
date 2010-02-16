@@ -31,9 +31,13 @@ MODULE_AUTHOR("George Kibardin");
 #define SABI_GET_ETIQUETTE_MODE                0x31
 #define SABI_SET_ETIQUETTE_MODE                0x32
 
-/* 0 is off, 1 is on, and 2 is a second user-defined key? */
+/* 0 is off, 1 is on, and 2 is a last used setting */
 #define SABI_GET_WIRELESS_BUTTON       0x12
 #define SABI_SET_WIRELESS_BUTTON       0x13
+
+/* 0 is off, 1 is on */
+#define SABI_GET_BACKLIGHT             0x2d
+#define SABI_SET_BACKLIGHT             0x2e
 
 /*
  * SABI HEADER in low memory (f0000)
@@ -74,6 +78,7 @@ static void __iomem *f0000_segment;
 static struct mutex sabi_mutex;
 static struct proc_dir_entry *proc_entry_slow_down;
 static struct proc_dir_entry *proc_entry_wifi_kill;
+static struct proc_dir_entry *proc_entry_backlight;
 
 static struct dmi_system_id __initdata samsung_dmi_table[] = {
     {
@@ -157,6 +162,32 @@ int easy_slow_down_write(struct file *file, const char __user *buffer,
     }
     if (mode >= '0' && mode <= '2') {
         sabi_exec_command(SABI_SET_ETIQUETTE_MODE, mode - '0', NULL);
+    }
+    return count;
+}
+
+int easy_backlight_read(char *page, char **start, off_t off,
+			  int count, int *eof, void *data) {
+    struct sabi_retval sretval;
+    
+    if (off > 0) {
+        *eof = 1;
+    }
+    else if (!sabi_exec_command(SABI_GET_BACKLIGHT, 0, &sretval)) {
+        page[0] = sretval.retval[0] + '0';
+        return 1;
+    }
+    return 0;
+}
+
+int easy_backlight_write(struct file *file, const char __user *buffer,
+			   unsigned long count, void *data) {
+    char mode = '0';
+    if (copy_from_user(&mode, buffer, 1)) {
+        return -EFAULT;
+    }
+    if (mode >= '0' && mode <= '1') {
+        sabi_exec_command(SABI_SET_BACKLIGHT, mode - '0', NULL);
     }
     return count;
 }
@@ -282,12 +313,27 @@ int easy_slow_down_init(void) {
         proc_entry_wifi_kill->read_proc = easy_wifi_kill_read;
         proc_entry_wifi_kill->write_proc = easy_wifi_kill_write;
     }
+    
+    proc_entry_backlight = create_proc_entry("easy_backlight", 0666, NULL);
+    if (proc_entry_backlight == NULL) {
+        printk(KERN_INFO "Easy slow down manager: Couldn't create proc entry\n");
+        remove_proc_entry("easy_slow_down_manager", NULL);
+        remove_proc_entry("easy_wifi_kill", NULL);
+        iounmap(sabi_iface);
+        iounmap(f0000_segment);
+        return -ENOMEM;
+    }
+    else {
+        proc_entry_backlight->read_proc = easy_backlight_read;
+        proc_entry_backlight->write_proc = easy_backlight_write;
+    }
     return 0;
 }
 
 void easy_slow_down_exit(void) {
     remove_proc_entry("easy_slow_down_manager", NULL);
     remove_proc_entry("easy_wifi_kill", NULL);
+    remove_proc_entry("easy_backlight", NULL);
     iounmap(sabi_iface);
     iounmap(f0000_segment);
     printk(KERN_INFO "Easy slow down manager exit.\n");
