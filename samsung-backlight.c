@@ -38,6 +38,10 @@ MODULE_PARM_DESC(debug, "Verbose output");
 static int use_sabi = 1;
 module_param(use_sabi, bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(use_sabi, "Use SABI to control brightness");
+static int force = 0;
+module_param(force, bool, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(force, "Skip model/vendor check");
+
 
 static struct pci_dev *pci_device;
 static struct backlight_device *backlight_device;
@@ -227,6 +231,15 @@ static struct dmi_system_id __initdata samsung_dmi_table[] = {
 		},
 		.callback = dmi_check_cb,
 	},
+        {
+		.ident = "N150/N210/N220",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "SAMSUNG ELECTRONICS CO., LTD."),
+			DMI_MATCH(DMI_PRODUCT_NAME, "N150/N210/N220"),
+			DMI_MATCH(DMI_BOARD_NAME, "N150/N210/N220"),
+		},
+		.callback = dmi_check_cb,
+        },
 	{ },
 };
 
@@ -246,9 +259,14 @@ static int __init samsung_init(void)
 {
         struct device *parent=NULL;	
 
-	if ( (use_sabi && !dmi_check_system(samsung_sabi_dmi_table)) ||
-             (!use_sabi && !dmi_check_system(samsung_dmi_table)))
-		return -ENODEV;
+	if (use_sabi && !dmi_check_system(samsung_sabi_dmi_table) && !force){
+	    printk(KERN_ERR "Samsung-backlight is intended to work only with Samsung laptops.\n");
+	    return -ENODEV;
+	}
+        if (!use_sabi && !dmi_check_system(samsung_dmi_table) && !force){
+	    printk(KERN_ERR "Sorry, your laptop is not supported. Try use_sabi=1\n");
+	    return -ENODEV;
+        }
 
         if(use_sabi){
 	    const char *test_str = "SwSmi@";
@@ -258,11 +276,6 @@ static int __init samsung_init(void)
 	    unsigned int ifaceP;
 	
 	    mutex_init(&sabi_mutex);
-	
-	    if (!dmi_check_system(samsung_dmi_table)) {
-	        printk(KERN_ERR "Samsung-backlight is intended to work only with Samsung laptops.\n");
-	        return -ENODEV;
-	    }
 	
 	    f0000_segment = ioremap(0xf0000, 0xffff);
 	    if (!f0000_segment) {
@@ -324,7 +337,7 @@ static int __init samsung_init(void)
 	   * NP-Q45 uses 0x2a02.  Odds are we might need to add more to the
 	   * list over time...
 	   */
-          int pcidevids[]={0x27ae,0x2a02,0x2a42,0};
+          int pcidevids[]={0x27ae,0x2a02,0x2a42,0xa011,0};
 	  int i;
           for(i=0, pci_device=NULL;pcidevids[i]>0 && pci_device==NULL;++i)
 	    pci_device = pci_get_device(PCI_VENDOR_ID_INTEL, pcidevids[i], NULL);
@@ -366,7 +379,7 @@ static void __exit samsung_exit(void)
 module_init(samsung_init);
 module_exit(samsung_exit);
 
-MODULE_AUTHOR("Greg Kroah-Hartman <gregkh@suse.de>");
+MODULE_AUTHOR("Kobelkov S. <sergeyko81@gmail.com>, Greg Kroah-Hartman <gregkh@suse.de>");
 MODULE_DESCRIPTION("Samsung Backlight driver");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("dmi:*:svnSAMSUNGELECTRONICSCO.,LTD.:pn*:*:rn*:*");
