@@ -134,7 +134,7 @@ static u8 read_brightness(void)
         if(use_sabi){
           struct sabi_retval sretval;    
           brightness=0;
-          if (!sabi_exec_command(SABI_GET_BACKLIGHT, 0, &sretval)) {
+          if (!sabi_exec_command(SABI_GET_BRIGHTNESS, 0, &sretval)) {
             brightness = sretval.retval[0];
             if (brightness != 0)
               --brightness;
@@ -155,7 +155,8 @@ static void set_brightness(u8 brightness)
 
 static int get_brightness(struct backlight_device *bd)
 {
-	return bd->props.brightness;
+        return read_brightness();
+	//return bd->props.brightness;
 }
 
 static int update_status(struct backlight_device *bd)
