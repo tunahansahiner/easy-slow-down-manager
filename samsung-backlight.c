@@ -259,6 +259,9 @@ static struct dmi_system_id __initdata samsung_sabi_dmi_table[] = {
 static int __init samsung_init(void)
 {
         struct device *parent=NULL;	
+        struct backlight_properties props;
+        memset(&props, 0, sizeof(struct backlight_properties));
+        props.max_brightness = 20 - 1;
 
 	if (use_sabi && !dmi_check_system(samsung_sabi_dmi_table) && !force){
 	    printk(KERN_ERR "Samsung-backlight is intended to work only with Samsung laptops.\n");
@@ -350,7 +353,7 @@ static int __init samsung_init(void)
         /* create a backlight device to talk to this one */
 	backlight_device = backlight_device_register("samsung",
 						     parent,
-						     NULL, &backlight_ops);
+						     NULL, &backlight_ops, &props);
 	if (IS_ERR(backlight_device)) {
                 if(pci_device)
 		  pci_dev_put(pci_device);
