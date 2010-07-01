@@ -8,7 +8,7 @@ url="http://code.google.com/p/easy-slow-down-manager"
 license=('GPL')
 depends=('kernel26' 'kernel26-headers')
 source=(easy-slow-down-manager.tar.gz)
-md5sums=('c66804fa25b9c62c0669817bcbd7110c')
+md5sums=('2ebb3cfba5b6bcebbb5d7e8850406d6d')
 
 build() {
   cd "$srcdir"
