@@ -17,6 +17,7 @@
 #include <linux/backlight.h>
 #include <linux/fb.h>
 #include <linux/dmi.h>
+#include <linux/version.h>
 
 #define MAX_BRIGHT	0xff
 #define OFFSET		0xf4
@@ -259,9 +260,6 @@ static struct dmi_system_id __initdata samsung_sabi_dmi_table[] = {
 static int __init samsung_init(void)
 {
         struct device *parent=NULL;	
-        struct backlight_properties props;
-        memset(&props, 0, sizeof(struct backlight_properties));
-        props.max_brightness = 20 - 1;
 
 	if (use_sabi && !dmi_check_system(samsung_sabi_dmi_table) && !force){
 	    printk(KERN_ERR "Samsung-backlight is intended to work only with Samsung laptops.\n");
@@ -351,9 +349,15 @@ static int __init samsung_init(void)
         }
  
         /* create a backlight device to talk to this one */
+#if LINUX_VERSION_CODE>=KERNEL_VERSION(2,6,34)
 	backlight_device = backlight_device_register("samsung",
 						     parent,
-						     NULL, &backlight_ops, &props);
+						     NULL, &backlight_ops,NULL);
+#else
+	backlight_device = backlight_device_register("samsung",
+						     parent,
+						     NULL, &backlight_ops);
+#endif
 	if (IS_ERR(backlight_device)) {
                 if(pci_device)
 		  pci_dev_put(pci_device);
@@ -383,7 +387,7 @@ static void __exit samsung_exit(void)
 module_init(samsung_init);
 module_exit(samsung_exit);
 
-MODULE_AUTHOR("Kobelkov S. <sergeyko81@gmail.com>, Greg Kroah-Hartman <gregkh@suse.de>");
+MODULE_AUTHOR("Kobelkov S. <sergeyko81@gmail.com>, based on work by Greg Kroah-Hartman <gregkh@suse.de>");
 MODULE_DESCRIPTION("Samsung Backlight driver");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("dmi:*:svnSAMSUNGELECTRONICSCO.,LTD.:pn*:*:rn*:*");
