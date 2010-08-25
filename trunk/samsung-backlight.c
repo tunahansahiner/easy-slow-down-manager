@@ -242,6 +242,15 @@ static struct dmi_system_id __initdata samsung_dmi_table[] = {
 		},
 		.callback = dmi_check_cb,
         },
+        {
+                .ident = "R530/R730",
+                .matches = {
+                      DMI_MATCH(DMI_SYS_VENDOR, "SAMSUNG ELECTRONICS CO., LTD."),
+                      DMI_MATCH(DMI_PRODUCT_NAME, "R530/R730"),
+                      DMI_MATCH(DMI_BOARD_NAME, "R530/R730"),
+                },
+                .callback = dmi_check_cb,
+        },
 	{ },
 };
 
@@ -387,7 +396,7 @@ static void __exit samsung_exit(void)
 module_init(samsung_init);
 module_exit(samsung_exit);
 
-MODULE_AUTHOR("Kobelkov S. <sergeyko81@gmail.com>, based on work by Greg Kroah-Hartman <gregkh@suse.de>");
+MODULE_AUTHOR("Kobelkov S. <sergeyko81@gmail.com>, based on the work by Greg Kroah-Hartman <gregkh@suse.de>");
 MODULE_DESCRIPTION("Samsung Backlight driver");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("dmi:*:svnSAMSUNGELECTRONICSCO.,LTD.:pn*:*:rn*:*");
