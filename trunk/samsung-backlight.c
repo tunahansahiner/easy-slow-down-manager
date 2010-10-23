@@ -17,6 +17,7 @@
 #include <linux/backlight.h>
 #include <linux/fb.h>
 #include <linux/dmi.h>
+#include <linux/delay.h>
 #include <linux/version.h>
 
 #define MAX_BRIGHT	0xff

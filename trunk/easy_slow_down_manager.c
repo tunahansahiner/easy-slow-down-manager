@@ -3,6 +3,7 @@
 #include <linux/kernel.h>
 #include <linux/proc_fs.h>
 #include <linux/pci.h>
+#include <linux/delay.h>
 #include <asm/uaccess.h>
 #include <linux/dmi.h>
 
@@ -218,7 +219,7 @@ int easy_wifi_kill_write(struct file *file, const char __user *buffer,
     return count;
 }
 
-int easy_slow_down_init(void) {
+int __init easy_slow_down_init(void) {
     
     const char *test_str = "SwSmi@";
     int pos;
@@ -330,7 +331,7 @@ int easy_slow_down_init(void) {
     return 0;
 }
 
-void easy_slow_down_exit(void) {
+void __exit easy_slow_down_exit(void) {
     remove_proc_entry("easy_slow_down_manager", NULL);
     remove_proc_entry("easy_wifi_kill", NULL);
     remove_proc_entry("easy_backlight", NULL);
