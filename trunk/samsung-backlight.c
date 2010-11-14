@@ -235,11 +235,11 @@ static struct dmi_system_id __initdata samsung_dmi_table[] = {
 		.callback = dmi_check_cb,
 	},
         {
-		.ident = "N150/N210/N220",
+		.ident = "N150/N210/N220/N230",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "SAMSUNG ELECTRONICS CO., LTD."),
-			DMI_MATCH(DMI_PRODUCT_NAME, "N150/N210/N220"),
-			DMI_MATCH(DMI_BOARD_NAME, "N150/N210/N220"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "N150/N210/N220/N230"),
+			DMI_MATCH(DMI_BOARD_NAME, "N150/N210/N220/N230"),
 		},
 		.callback = dmi_check_cb,
         },
@@ -276,7 +276,7 @@ static int __init samsung_init(void)
 	    return -ENODEV;
 	}
         if (!use_sabi && !dmi_check_system(samsung_dmi_table) && !force){
-	    printk(KERN_ERR "Sorry, your laptop is not supported. Try use_sabi=1\n");
+	    printk(KERN_ERR "Sorry, your laptop is not supported. Try use_sabi=0\n");
 	    return -ENODEV;
         }
 
