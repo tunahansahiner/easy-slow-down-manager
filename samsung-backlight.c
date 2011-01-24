@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2009 Greg Kroah-Hartman (gregkh@suse.de)
  * Copyright (C) 2009 Novell Inc.
- * Modified 2010 Kobelkov Sergey (sergeyko81@gmail.com)
+ * Modified 2010-2011 Kobelkov Sergey (sergeyko81@gmail.com)
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 as published by
@@ -21,6 +21,8 @@
 #include <linux/version.h>
 
 #define MAX_BRIGHT	0xff
+#define MIN_BRIGHT      0x0A
+
 #define OFFSET		0xf4
 
 #define SABI_MAX_BRIGHT     0x07
@@ -34,16 +36,34 @@
 static int offset = OFFSET;
 module_param(offset, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(offset, "The offset into the PCI device for the brightness control");
+
 static int debug = 0;
 module_param(debug, bool, S_IRUGO | S_IWUSR);
-MODULE_PARM_DESC(debug, "Verbose output");
+MODULE_PARM_DESC(debug, "Verbose debugging");
+
+static int levels = SABI_MAX_BRIGHT;
+module_param(levels, int, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(levels, "Number of brightness levels");
+
+static int minbright = 0;
+module_param(minbright, int, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(minbright, "Minimum brightness level");
+
+static int maxbright = 0;
+module_param(maxbright, int, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(maxbright, "Maximum brightness level");
+
 static int use_sabi = 1;
 module_param(use_sabi, bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(use_sabi, "Use SABI to control brightness");
+
 static int force = 0;
 module_param(force, bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(force, "Skip model/vendor check");
 
+static int sabi_delay = 10;
+module_param(sabi_delay, int, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(sabi_delay, "SABI command delay, ms");
 
 static struct pci_dev *pci_device;
 static struct backlight_device *backlight_device;
@@ -86,7 +106,7 @@ static struct sabi_interface __iomem *sabi_iface;
 static void __iomem *f0000_segment;
 static struct mutex sabi_mutex;
 
-int sabi_exec_command(u8 command, u8 data, struct sabi_retval *sretval)
+static int sabi_exec_command(u8 command, u8 data, struct sabi_retval *sretval)
 {
     int retval = 0;
     
@@ -103,7 +123,7 @@ int sabi_exec_command(u8 command, u8 data, struct sabi_retval *sretval)
     outb(readb(&sabi->iface_func), readw(&sabi->port));
 
     /* sleep for a bit to let the command complete */
-    msleep(10);
+    msleep(sabi_delay);
 
     /* write protect memory to make it safe */
     outb(readb(&sabi->re_mem), readw(&sabi->port));
@@ -129,6 +149,13 @@ int sabi_exec_command(u8 command, u8 data, struct sabi_retval *sretval)
     return retval;
 }
 
+static unsigned level2brightness(const unsigned level){
+  return ((maxbright-minbright)*level+levels-1)/levels+minbright;		
+}
+
+static unsigned brightness2level(const unsigned b){
+  return b<minbright ? 0 : (b-minbright)*levels/(maxbright-minbright);
+}
 
 static u8 read_brightness(void)
 {
@@ -138,32 +165,41 @@ static u8 read_brightness(void)
           brightness=0;
           if (!sabi_exec_command(SABI_GET_BRIGHTNESS, 0, &sretval)) {
             brightness = sretval.retval[0];
-            if (brightness != 0)
+            if (brightness)
               --brightness;
           }
         } else {
 	  pci_read_config_byte(pci_device, offset, &brightness);
         }
-	return brightness;
+	return brightness2level(brightness);
 }
 
 static void set_brightness(u8 brightness)
 {
+	if(debug)
+		printk(KERN_DEBUG "Set brightness level %d (hw %d)\n",brightness,level2brightness(brightness));
 	if(use_sabi)
-          sabi_exec_command(SABI_SET_BRIGHTNESS, brightness + 1, NULL);
-	else
-          pci_write_config_byte(pci_device, offset, brightness);
+          sabi_exec_command(SABI_SET_BRIGHTNESS, level2brightness(brightness) + 1, NULL);
+	else {
+          pci_write_config_byte(pci_device, offset, level2brightness(brightness));
+        }
 }
 
 static int get_brightness(struct backlight_device *bd)
 {
-        return read_brightness();
-	//return bd->props.brightness;
+        int res;
+	res=read_brightness();
+	if(debug)
+		printk(KERN_DEBUG "Current brightness level %d (shadow %d)",res,bd->props.brightness);
+	res=bd->props.brightness;
+	return res;
 }
 
 static int update_status(struct backlight_device *bd)
 {
 	set_brightness(bd->props.brightness);
+	if(debug)
+	  printk(KERN_DEBUG "Brightness power %d\n",bd->props.power);
 	return 0;
 }
 
@@ -235,11 +271,11 @@ static struct dmi_system_id __initdata samsung_dmi_table[] = {
 		.callback = dmi_check_cb,
 	},
         {
-		.ident = "N150/N210/N220/N230",
+		.ident = "N150/N210/N220/N230/N250",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "SAMSUNG ELECTRONICS CO., LTD."),
-			DMI_MATCH(DMI_PRODUCT_NAME, "N150/N210/N220/N230"),
-			DMI_MATCH(DMI_BOARD_NAME, "N150/N210/N220/N230"),
+			DMI_MATCH(DMI_PRODUCT_NAME, "N150/N210/N220/N230/N250"),
+			DMI_MATCH(DMI_BOARD_NAME, "N150/N210/N220/N230/N250"),
 		},
 		.callback = dmi_check_cb,
         },
@@ -251,6 +287,15 @@ static struct dmi_system_id __initdata samsung_dmi_table[] = {
                       DMI_MATCH(DMI_BOARD_NAME, "R530/R730"),
                 },
                 .callback = dmi_check_cb,
+        },
+	{
+		.ident = "NF110/NF210/NF310",
+		.matches = {
+			DMI_MATCH(DMI_SYS_VENDOR, "SAMSUNG ELECTRONICS CO., LTD."),
+			DMI_MATCH(DMI_PRODUCT_NAME, "NF110/NF210/NF310"),
+			DMI_MATCH(DMI_BOARD_NAME, "NF110/NF210/NF310"),
+		},
+		.callback = dmi_check_cb,
         },
 	{ },
 };
@@ -276,7 +321,7 @@ static int __init samsung_init(void)
 	    return -ENODEV;
 	}
         if (!use_sabi && !dmi_check_system(samsung_dmi_table) && !force){
-	    printk(KERN_ERR "Sorry, your laptop is not supported. Try use_sabi=0\n");
+	    printk(KERN_ERR "Sorry, your laptop is not supported. Try use_sabi=1\n");
 	    return -ENODEV;
         }
 
@@ -286,6 +331,9 @@ static int __init samsung_init(void)
 	    int index = 0;
 	    void __iomem *base;
 	    unsigned int ifaceP;
+		
+	    if(maxbright==0)
+	      maxbright=SABI_MAX_BRIGHT;
 	
 	    mutex_init(&sabi_mutex);
 	
@@ -351,6 +399,10 @@ static int __init samsung_init(void)
 	   */
           int pcidevids[]={0x27ae,0x2a02,0x2a42,0xa011,0};
 	  int i;
+
+	  if(minbright<MIN_BRIGHT)
+		  minbright=MIN_BRIGHT;
+
           for(i=0, pci_device=NULL;pcidevids[i]>0 && pci_device==NULL;++i)
 	    pci_device = pci_get_device(PCI_VENDOR_ID_INTEL, pcidevids[i], NULL);
           if (!pci_device)
@@ -374,7 +426,7 @@ static int __init samsung_init(void)
 		return PTR_ERR(backlight_device);
 	}
 
-	backlight_device->props.max_brightness = use_sabi ? SABI_MAX_BRIGHT : MAX_BRIGHT;
+	backlight_device->props.max_brightness = levels;
 	backlight_device->props.brightness = read_brightness();
 	backlight_device->props.power = FB_BLANK_UNBLANK;
 	backlight_update_status(backlight_device);
