@@ -401,7 +401,9 @@ static int __init samsung_init(void)
 	  int i;
 
 	  if(minbright<MIN_BRIGHT)
-		  minbright=MIN_BRIGHT;
+            minbright=MIN_BRIGHT;
+          if(maxbright==0)
+            maxbright=MAX_BRIGHT;
 
           for(i=0, pci_device=NULL;pcidevids[i]>0 && pci_device==NULL;++i)
 	    pci_device = pci_get_device(PCI_VENDOR_ID_INTEL, pcidevids[i], NULL);
