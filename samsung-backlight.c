@@ -34,7 +34,7 @@
 #define SABI_SET_BACKLIGHT             0x2e
 
 static int offset = OFFSET;
-module_param(offset, int, S_IRUGO | S_IWUSR);
+module_param(offset, int, S_IRUGO);
 MODULE_PARM_DESC(offset, "The offset into the PCI device for the brightness control");
 
 static int debug = 0;
@@ -42,27 +42,27 @@ module_param(debug, bool, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(debug, "Verbose debugging");
 
 static int levels = SABI_MAX_BRIGHT;
-module_param(levels, int, S_IRUGO | S_IWUSR);
+module_param(levels, int, S_IRUGO);
 MODULE_PARM_DESC(levels, "Number of brightness levels");
 
-static int minbright = 0;
-module_param(minbright, int, S_IRUGO | S_IWUSR);
+static int minbright = -1;
+module_param(minbright, int, S_IRUGO);
 MODULE_PARM_DESC(minbright, "Minimum brightness level for non-SABI");
 
 static int maxbright = -1;
-module_param(maxbright, int, S_IRUGO | S_IWUSR);
+module_param(maxbright, int, S_IRUGO);
 MODULE_PARM_DESC(maxbright, "Maximum brightness level for non-SABI");
 
 static int use_sabi = 1;
-module_param(use_sabi, bool, S_IRUGO | S_IWUSR);
+module_param(use_sabi, bool, S_IRUGO);
 MODULE_PARM_DESC(use_sabi, "Use SABI to control brightness");
 
 static int force = 0;
-module_param(force, bool, S_IRUGO | S_IWUSR);
+module_param(force, bool, S_IRUGO);
 MODULE_PARM_DESC(force, "Skip model/vendor check");
 
-static int sabi_delay = 10;
-module_param(sabi_delay, int, S_IRUGO | S_IWUSR);
+static int sabi_delay = 0;
+module_param(sabi_delay, int, S_IRUGO);
 MODULE_PARM_DESC(sabi_delay, "SABI command delay, ms");
 
 static int initbright = -1;
@@ -128,7 +128,7 @@ static int sabi_exec_command(u8 command, u8 data, struct sabi_retval *sretval)
     outb(readb(&sabi->iface_func), readw(&sabi->port));
 
     /* sleep for a bit to let the command complete */
-    //msleep(sabi_delay);
+    msleep(sabi_delay);
 
     /* write protect memory to make it safe */
     outb(readb(&sabi->re_mem), readw(&sabi->port));
@@ -425,8 +425,8 @@ static int __init samsung_init(void)
           int pcidevids[]={0x27ae,0x2a02,0x2a42,0xa011,0};
 	  int i;
 
-	  if(minbright<MIN_BRIGHT || minbright>MAX_BRIGHT)
-            minbright=MIN_BRIGHT;
+	  if(minbright<0 || minbright>MAX_BRIGHT)
+            minbright=0xA;
           if(maxbright<0 || maxbright>MAX_BRIGHT)
             maxbright=MAX_BRIGHT;
           if(maxbright<minbright)
