@@ -24,6 +24,8 @@ debug=(0|1)          print debug information
 use_sabi=(0|1)       change brightness via PCI or SABI (default)
 force=(0|1)          skip model/vendor checks
 sabi_delay=value     delay between SABI commands,ms
-minbright,maxbright  specify minimum and maximum brightness levels; for PCI interface default is (10,255); for SABI (0,7)
-levels               number of brightness levels; default is 7
+minbright=value
+maxbright=value      specify minimum and maximum brightness levels for PCI interface (non-SABI); default is (10,255); for SABI (0,7)
+levels=value         number of brightness levels for non-SABI mode; default is 7
+initbright=value     initial brightness level
 
