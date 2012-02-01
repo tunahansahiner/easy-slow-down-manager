@@ -5,7 +5,7 @@
 # license: GPL
 
 NAME=easy_slow_down_manager
-VERSION=0.13.7
+VERSION=0.15
 
 dkms_ver=`grep PACKAGE_VERSION= dkms.conf | sed 's/PACKAGE_VERSION=//' | sed 's/"//g'`
 if [ $VERSION != $dkms_ver ]; then

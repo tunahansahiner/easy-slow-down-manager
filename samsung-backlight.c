@@ -47,11 +47,11 @@ MODULE_PARM_DESC(levels, "Number of brightness levels");
 
 static int minbright = 0;
 module_param(minbright, int, S_IRUGO | S_IWUSR);
-MODULE_PARM_DESC(minbright, "Minimum brightness level");
+MODULE_PARM_DESC(minbright, "Minimum brightness level for non-SABI");
 
-static int maxbright = 0;
+static int maxbright = -1;
 module_param(maxbright, int, S_IRUGO | S_IWUSR);
-MODULE_PARM_DESC(maxbright, "Maximum brightness level");
+MODULE_PARM_DESC(maxbright, "Maximum brightness level for non-SABI");
 
 static int use_sabi = 1;
 module_param(use_sabi, bool, S_IRUGO | S_IWUSR);
@@ -65,8 +65,13 @@ static int sabi_delay = 10;
 module_param(sabi_delay, int, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(sabi_delay, "SABI command delay, ms");
 
+static int initbright = -1;
+module_param(initbright, int, S_IRUGO);
+MODULE_PARM_DESC(initbright, "Initial brightness");
+
 static struct pci_dev *pci_device;
 static struct backlight_device *backlight_device;
+static int flash_workaround=0;
 
 /*
  * SABI HEADER in low memory (f0000)
@@ -123,7 +128,7 @@ static int sabi_exec_command(u8 command, u8 data, struct sabi_retval *sretval)
     outb(readb(&sabi->iface_func), readw(&sabi->port));
 
     /* sleep for a bit to let the command complete */
-    msleep(sabi_delay);
+    //msleep(sabi_delay);
 
     /* write protect memory to make it safe */
     outb(readb(&sabi->re_mem), readw(&sabi->port));
@@ -150,11 +155,15 @@ static int sabi_exec_command(u8 command, u8 data, struct sabi_retval *sretval)
 }
 
 static unsigned level2brightness(const unsigned level){
-  return ((maxbright-minbright)*level+levels-1)/levels+minbright;		
+  return use_sabi ? level+1 : ((maxbright-minbright)*level+levels-1)/levels+minbright;		
 }
 
 static unsigned brightness2level(const unsigned b){
-  return b<minbright ? 0 : (b-minbright)*levels/(maxbright-minbright);
+  if(use_sabi){ 
+    return b>0 ? b-1 : 0;
+  } else {
+    return b<minbright ? 0 : (b-minbright)*levels/(maxbright-minbright);
+  }
 }
 
 static u8 read_brightness(void)
@@ -165,12 +174,12 @@ static u8 read_brightness(void)
           brightness=0;
           if (!sabi_exec_command(SABI_GET_BRIGHTNESS, 0, &sretval)) {
             brightness = sretval.retval[0];
-            if (brightness)
-              --brightness;
           }
         } else {
 	  pci_read_config_byte(pci_device, offset, &brightness);
         }
+        if(debug)
+                printk(KERN_DEBUG "Get brightness level %d (hw %d)\n",brightness2level(brightness),brightness);
 	return brightness2level(brightness);
 }
 
@@ -178,9 +187,14 @@ static void set_brightness(u8 brightness)
 {
 	if(debug)
 		printk(KERN_DEBUG "Set brightness level %d (hw %d)\n",brightness,level2brightness(brightness));
-	if(use_sabi)
-          sabi_exec_command(SABI_SET_BRIGHTNESS, level2brightness(brightness) + 1, NULL);
-	else {
+	if(use_sabi){
+          u8 new_brightness=level2brightness(brightness);
+          if(read_brightness()!=brightness){
+            if(flash_workaround)
+              sabi_exec_command(SABI_SET_BRIGHTNESS,0,NULL);
+            sabi_exec_command(SABI_SET_BRIGHTNESS, new_brightness, NULL);
+          }
+	} else {
           pci_write_config_byte(pci_device, offset, level2brightness(brightness));
         }
 }
@@ -191,7 +205,7 @@ static int get_brightness(struct backlight_device *bd)
 	res=read_brightness();
 	if(debug)
 		printk(KERN_DEBUG "Current brightness level %d (shadow %d)",res,bd->props.brightness);
-	res=bd->props.brightness;
+	//bd->props.brightness=res;
 	return res;
 }
 
@@ -201,6 +215,18 @@ static int update_status(struct backlight_device *bd)
 	if(debug)
 	  printk(KERN_DEBUG "Brightness power %d\n",bd->props.power);
 	return 0;
+}
+
+static void __init check_for_flash_workaround(void){
+         u8 start_level = read_brightness();
+         u8 test_level = start_level <= 3 ? start_level+3 : start_level-3; 
+         set_brightness(test_level);
+         if (read_brightness() != test_level) {
+                 flash_workaround = true;
+                 if(debug)
+                 	printk(KERN_DEBUG "display flash workaround enabled");
+         }
+         set_brightness(start_level);
 }
 
 static struct backlight_ops backlight_ops = {
@@ -332,10 +358,9 @@ static int __init samsung_init(void)
 	    void __iomem *base;
 	    unsigned int ifaceP;
 		
-	    if(maxbright==0)
-	      maxbright=SABI_MAX_BRIGHT;
-	
 	    mutex_init(&sabi_mutex);
+
+            levels = SABI_MAX_BRIGHT;
 	
 	    f0000_segment = ioremap(0xf0000, 0xffff);
 	    if (!f0000_segment) {
@@ -400,10 +425,12 @@ static int __init samsung_init(void)
           int pcidevids[]={0x27ae,0x2a02,0x2a42,0xa011,0};
 	  int i;
 
-	  if(minbright<MIN_BRIGHT)
+	  if(minbright<MIN_BRIGHT || minbright>MAX_BRIGHT)
             minbright=MIN_BRIGHT;
-          if(maxbright==0)
+          if(maxbright<0 || maxbright>MAX_BRIGHT)
             maxbright=MAX_BRIGHT;
+          if(maxbright<minbright)
+            maxbright=minbright;
 
           for(i=0, pci_device=NULL;pcidevids[i]>0 && pci_device==NULL;++i)
 	    pci_device = pci_get_device(PCI_VENDOR_ID_INTEL, pcidevids[i], NULL);
@@ -428,12 +455,16 @@ static int __init samsung_init(void)
 		return PTR_ERR(backlight_device);
 	}
 
+        check_for_flash_workaround();
+
+	backlight_device->props.type = BACKLIGHT_PLATFORM;
 	backlight_device->props.max_brightness = levels;
 	backlight_device->props.brightness = read_brightness();
 	backlight_device->props.power = FB_BLANK_UNBLANK;
+        if(initbright>=0) backlight_device->props.brightness=initbright; 
 	backlight_update_status(backlight_device);
-
-	return 0;
+	
+        return 0;
 }
 
 static void __exit samsung_exit(void)
